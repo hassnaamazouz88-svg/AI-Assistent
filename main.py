@@ -1,8 +1,9 @@
 from fastapi import FastAPI
 
+from api.routes.dossiers import router as dossiers_router
+
+
 app = FastAPI()
 
 
-@app.get("/health")
-def health_check():
-    return {"message": "API is healthy"}
+app.include_router(dossiers_router)
