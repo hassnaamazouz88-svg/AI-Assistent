@@ -1,9 +1,11 @@
+import os
 from sqlalchemy.orm import Session
 from fastapi import UploadFile
 
 from repositories import dossier_repository
 from repositories import document_repository
 from storage import file_manager
+from storage import zip_handler
 
 
 async def create_dossier_with_files(
@@ -14,50 +16,67 @@ async def create_dossier_with_files(
     """
     Crée un dossier et enregistre les fichiers associés.
 
-    Toutes les opérations (création du dossier, sauvegarde des fichiers,
-    création des documents) sont regroupées dans une seule transaction :
-    si une erreur survient à n'importe quelle étape, tout est annulé
-    (rollback en base + suppression des fichiers déjà sauvegardés sur disque).
+    - Les fichiers normaux sont sauvegardés avec file_manager.
+    - Les fichiers ZIP sont extraits avec zip_handler.
+    - Chaque fichier enregistré devient un Document en base.
+    - En cas d'erreur, la transaction DB est annulée et les fichiers
+      déjà sauvegardés/extraits sont supprimés.
     """
+
     saved_files = []
 
     try:
-        # 1. Créer le dossier (pas encore commité, juste flush pour obtenir l'id)
         dossier = dossier_repository.create_dossier(
             db=db,
             nom=nom
         )
 
-        # 2. Traiter chaque fichier
+        destination_dir = f"storage/dossiers/{dossier.id}"
+
         for file in files:
-            # Sauvegarder le fichier sur le disque
-            chemin_stockage = await file_manager.save_file(
-                file=file,
-                dossier_id=dossier.id
-            )
-            saved_files.append(chemin_stockage)
 
-            # Créer le document en base (pas encore commité)
-            document_repository.create_document(
-                db=db,
-                nom_fichier=file.filename,
-                chemin_stockage=chemin_stockage,
-                dossier_id=dossier.id
-            )
+            if file.filename.lower().endswith(".zip"):
 
-        # 3. Tout s'est bien passé : on valide définitivement en base
+                extracted_paths = zip_handler.extract_zip_contents(
+                    zip_file=file,
+                    destination_dir=destination_dir
+                )
+
+                saved_files.extend(extracted_paths)
+
+                for path in extracted_paths:
+
+                    document_repository.create_document(
+                        db=db,
+                        nom_fichier=os.path.basename(path),
+                        chemin_stockage=path,
+                        dossier_id=dossier.id
+                    )
+
+            else:
+
+                chemin_stockage = await file_manager.save_file(
+                    file=file,
+                    dossier_id=dossier.id
+                )
+
+                saved_files.append(chemin_stockage)
+
+                document_repository.create_document(
+                    db=db,
+                    nom_fichier=file.filename,
+                    chemin_stockage=chemin_stockage,
+                    dossier_id=dossier.id
+                )
+
         db.commit()
-
-        # 4. Recharger le dossier pour que la relation "documents" soit à jour
         db.refresh(dossier)
 
         return dossier
 
     except Exception:
-        # Annuler toutes les opérations DB non commitées
         db.rollback()
 
-        # Supprimer les fichiers déjà sauvegardés sur le disque
         for path in saved_files:
             file_manager.delete_file(path)
 
