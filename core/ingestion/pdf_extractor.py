@@ -1,14 +1,9 @@
 import fitz
 
+from core.ingestion.ocr_extractor import ocr_page_with_pennyocr
 
-def is_page_scanned(page: "fitz.Page", seuil_caracteres: int = 20) -> bool:
-    """
-    Détermine si une page de PDF est scannée (image) ou native (texte réel).
 
-    Une page est considérée comme scannée si l'extraction directe de son
-    texte renvoie très peu de caractères, alors que la page contient
-    visiblement du contenu.
-    """
+def is_page_scanned(page: fitz.Page, seuil_caracteres: int = 20) -> bool:
     texte = page.get_text().strip()
     return len(texte) < seuil_caracteres
 
@@ -16,20 +11,7 @@ def is_page_scanned(page: "fitz.Page", seuil_caracteres: int = 20) -> bool:
 def extract_pdf(file_path: str) -> dict:
     """
     Extrait le texte d'un fichier PDF, page par page.
-
-    Retourne :
-    {
-        "text": "...",
-        "pages": [
-            {"page_number": 1, "text": "...", "is_scanned": False}
-        ],
-        "total_pages": 10,
-        "scanned_pages": 2
-    }
-
-    Note : pour les pages détectées comme scannées, "text" reste vide
-    à ce stade — leur contenu sera récupéré séparément via l'OCR
-    (ocr_extractor.py), à une étape ultérieure du pipeline.
+    Les pages scannées passent par l'OCR (PennyOCR).
     """
     pages = []
     full_text = []
@@ -44,6 +26,7 @@ def extract_pdf(file_path: str) -> dict:
 
             if is_scanned:
                 scanned_pages += 1
+                text = ocr_page_with_pennyocr(page)
 
             pages.append({
                 "page_number": page_number,

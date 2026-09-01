@@ -13,6 +13,8 @@ class Config:
         self.DB_HOST = os.getenv("DB_HOST", None)
         self.DB_PORT = os.getenv("DB_PORT", None)
         self.DB_NAME = os.getenv("DB_NAME", None)
+        
+        self.PENNYOCR_API_KEY = os.getenv("PENNYOCR_API_KEY", None)
 
 
 # Une seule instance, créée une fois, au niveau du module (pas indentée dans la classe)
