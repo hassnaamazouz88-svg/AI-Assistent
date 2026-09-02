@@ -42,7 +42,7 @@ def ocr_page_with_pennyocr(page: fitz.Page, dpi: int = 250) -> str:
         headers=headers,
         files=files,
         params=params,
-        timeout=30
+        timeout=90
     )
 
     if response.status_code == 402:

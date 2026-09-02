@@ -1,7 +1,7 @@
 import os
 from core.ingestion.pipeline import process_document
 
-fichier_a_tester = "storage/dossiers/37e3cb7d-3acc-4057-bd54-2348fbc4df06/Dernières pages.pdf"
+fichier_a_tester = "storage/dossiers/48ef5e75-466a-4828-b0e4-63acb730e416/Avis Français.doc"
 
 print("Le fichier existe :", os.path.exists(fichier_a_tester))
 print("Chemin absolu résolu :", os.path.abspath(fichier_a_tester))
