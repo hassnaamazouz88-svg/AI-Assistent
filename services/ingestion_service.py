@@ -5,6 +5,10 @@ from sqlalchemy.orm import Session
 from repositories import dossier_repository
 from repositories import document_repository
 
+from core.rag.chunker import chunk_text
+from core.rag.embedder import embed_documents
+from core.rag import vector_store
+
 from core.ingestion.pipeline import process_document
 
 
@@ -39,10 +43,7 @@ def ingest_dossier(db: Session, dossier_id: uuid.UUID) -> dict:
         }
     """
 
-    # ---------------------------------------------------------
     # 1. Récupérer tous les documents du dossier
-    # ---------------------------------------------------------
-
     documents = document_repository.get_by_dossier_id(
         db,
         dossier_id
@@ -51,9 +52,7 @@ def ingest_dossier(db: Session, dossier_id: uuid.UUID) -> dict:
     traites = []
     echecs = []
 
-    # ---------------------------------------------------------
     # 2. Traiter chaque document indépendamment
-    # ---------------------------------------------------------
 
     for document in documents:
 
@@ -67,18 +66,21 @@ def ingest_dossier(db: Session, dossier_id: uuid.UUID) -> dict:
                 document.chemin_stockage
             )
 
-            # -------------------------------------------------
-            # TODO :
-            # chunking + embeddings + ChromaDB
-            # -------------------------------------------------
-            #
-            # Exemple futur :
-            #
-            # chunks = chunk_text(texte)
-            # embeddings = create_embeddings(chunks)
-            # vector_store.add(...)
-            #
-            # -------------------------------------------------
+            chunks = chunk_text(texte)
+
+            if chunks:
+                textes = [c["text"] for c in chunks]
+                vecteurs = embed_documents(textes)
+
+                for chunk, vecteur in zip(chunks, vecteurs):
+                    chunk["embedding"] = vecteur
+
+                vector_store.add_chunks(
+                    dossier_id=dossier_id,
+                    document_id=document.id,
+                    nom_fichier=document.nom_fichier,
+                    chunks=chunks
+                )
 
             # Document correctement traité
             document_repository.update_statut(
@@ -106,15 +108,12 @@ def ingest_dossier(db: Session, dossier_id: uuid.UUID) -> dict:
                 "erreur": str(e)
             })
 
-    # ---------------------------------------------------------
+
     # 3. Sauvegarder les statuts des documents
-    # ---------------------------------------------------------
 
     db.commit()
 
-    # ---------------------------------------------------------
     # 4. Mettre le dossier à "pret"
-    # ---------------------------------------------------------
 
     dossier_repository.update_statut(
         db,
@@ -124,9 +123,8 @@ def ingest_dossier(db: Session, dossier_id: uuid.UUID) -> dict:
 
     db.commit()
 
-    # ---------------------------------------------------------
+
     # 5. Retourner le résumé
-    # ---------------------------------------------------------
 
     return {
         "traites": traites,

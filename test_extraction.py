@@ -1,12 +1,29 @@
-import os
-from core.ingestion.pipeline import process_document
+from core.rag import vector_store
+from core.rag.embedder import embed_query
 
-fichier_a_tester = "storage/dossiers/48ef5e75-466a-4828-b0e4-63acb730e416/Avis Français.doc"
+# Remplace par le vrai id de ton dossier testé
+dossier_id = "37e3cb7d-3acc-4057-bd54-2348fbc4df06"
 
-print("Le fichier existe :", os.path.exists(fichier_a_tester))
-print("Chemin absolu résolu :", os.path.abspath(fichier_a_tester))
+# Vérifier combien de chunks ont été indexés au total pour ce dossier
+collection = vector_store.get_collection()
+resultat = collection.get(where={"dossier_id": dossier_id})
+print(f"Nombre de chunks indexés : {len(resultat['ids'])}")
 
-texte = process_document(fichier_a_tester)
-print("--- TEXTE EXTRAIT ---")
-print(texte[:2000])
-print(f"\nLongueur totale : {len(texte)} caractères")
+# Tester une vraie recherche sémantique
+question = "Quel est le délai d'exécution du marché ?"
+vecteur_question = embed_query(question)
+
+resultats_recherche = vector_store.search(
+    dossier_id=dossier_id,
+    query_embedding=vecteur_question,
+    top_k=5
+)
+
+print("\n--- Résultats de la recherche ---")
+for doc, distance, metadata in zip(
+    resultats_recherche["documents"][0],
+    resultats_recherche["distances"][0],
+    resultats_recherche["metadatas"][0]
+):
+    print(f"\n[{metadata['nom_fichier']}, distance: {distance:.3f}]")
+    print(doc[:200])
